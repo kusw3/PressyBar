@@ -1,0 +1,85 @@
+version: 3
+
+tasks:
+  default:
+    cmds:
+      - task: build
+      - task: bundle
+
+  build:
+    desc: Build the Swift app using Swift Package Manager
+    cmds:
+      - swift build -c release
+
+  bundle:
+    desc: Create the .app bundle
+    cmds:
+      - echo "Creating .app bundle..."
+      - rm -rf Packages/PressyBar.app
+      - mkdir -p Packages/PressyBar.app/Contents/MacOS
+      - mkdir -p Packages/PressyBar.app/Contents/Resources
+      - cp .build/release/PressyBar Packages/PressyBar.app/Contents/MacOS/PressyBar
+      - task: generate-iconset
+      - cp PressyBar.icns Packages/PressyBar.app/Contents/Resources/PressyBar.icns
+      - task: plist
+      - chmod +x Packages/PressyBar.app/Contents/MacOS/PressyBar
+
+  plist:
+    desc: Generate Info.plist
+    cmds:
+      - |
+        cat > Packages/PressyBar.app/Contents/Info.plist <<EOF
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>CFBundleName</key>
+            <string>PressyBar</string>
+            <key>CFBundleIdentifier</key>
+            <string>com.kusw3.pressybar</string>
+            <key>CFBundleExecutable</key>
+            <string>PressyBar</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+            <key>LSUIElement</key>
+            <true/>
+            <key>CFBundleIconFile</key>
+            <string>PressyBar</string>
+        </dict>
+        </plist>
+        EOF
+
+  open:
+    desc: Launch the app
+    cmds:
+      - open Packages/PressyBar.app
+
+  uninstall:
+    desc: Uninstall the app
+    cmds:
+      - echo "Uninstalling PressyBar..."
+      - rm -rf /Applications/PressyBar.app
+
+  install:
+    desc: Install the app
+    cmds:
+      - echo "Installing PressyBar..."
+      - cp -r Packages/PressyBar.app /Applications/
+
+  generate-iconset:
+    desc: Generate the app's iconset
+    cmds:
+      - echo "Generating iconset..."
+      - rm -rf PressyBar.iconset PressyBar.icns
+      - mkdir PressyBar.iconset
+      - sips -z 16 16 PressyBar-icon.png --out PressyBar.iconset/icon_16x16.png
+      - sips -z 32 32 PressyBar-icon.png --out PressyBar.iconset/icon_16x16@2x.png
+      - sips -z 32 32 PressyBar-icon.png --out PressyBar.iconset/icon_32x32.png
+      - sips -z 64 64 PressyBar-icon.png --out PressyBar.iconset/icon_32x32@2x.png
+      - sips -z 128 128 PressyBar-icon.png --out PressyBar.iconset/icon_128x128.png
+      - sips -z 256 256 PressyBar-icon.png --out PressyBar.iconset/icon_128x128@2x.png
+      - sips -z 256 256 PressyBar-icon.png --out PressyBar.iconset/icon_256x256.png
+      - sips -z 512 512 PressyBar-icon.png --out PressyBar.iconset/icon_256x256@2x.png
+      - sips -z 512 512 PressyBar-icon.png --out PressyBar.iconset/icon_512x512.png
+      - cp PressyBar-icon.png PressyBar.iconset/icon_512x512@2x.png
+      - iconutil -c icns -o PressyBar.icns PressyBar.iconset
