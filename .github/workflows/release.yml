@@ -33,7 +33,10 @@ jobs:
           standard-version --release-as ${{ github.event.inputs.bump }}
           echo "VERSION=$(node -p \"require('./package.json').version\")" >> $GITHUB_ENV
 
-      - name: 📄 Task build bundle
+      - name: 📄 Task build
+        run: task build
+
+      - name: 📄 Task bundle
         run: task bundle
 
       - name: 🔄 Update Info.plist version
