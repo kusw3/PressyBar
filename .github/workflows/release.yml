@@ -2,68 +2,66 @@ name: Release and Publish PressyBar
 
 on:
   workflow_dispatch:
-    inputs:
-      bump:
-        description: "Version bump type: patch, minor, major"
-        required: false
-        default: "patch"
 
 jobs:
-  release:
-    runs-on: macos-latest
-
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
     steps:
       - name: ⬇️ Checkout code
         uses: actions/checkout@v3
+      - id: release
+        name: 📦 Run release-please
+        uses: google-github-actions/release-please-action@v3
+        with:
+          release-type: simple
+          package-name: pressybar
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  build-and-publish:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: macos-latest
+    env:
+      VERSION: ${{ needs.release-please.outputs.version }}
+      TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
+    steps:
+      - name: ⬇️ Checkout code at tag
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
+          ref: ${{ env.TAG_NAME }}
 
-      - name: 📆 Set up Node.js (for standard-version)
-        uses: actions/setup-node@v3
-        with:
-          node-version: 18
+      - name: 🛠 Install go-task
+        run: brew install go-task/tap/go-task
 
-      - name: 🐾 Install dependencies
-        run: |
-          npm install -g standard-version
-          brew install go-task/tap/go-task
-
-      - name: ✨ Bump version and generate changelog
-        run: |
-          standard-version --release-as ${{ github.event.inputs.bump }}
-          echo "VERSION=$(node -p \"require('./package.json').version\")" >> $GITHUB_ENV
-
-      - name: 📄 Task build
+      - name: 🏗 Build
         run: task build
 
-      - name: 📄 Task bundle
+      - name: 🏗 Build bundle
         run: task bundle
 
-      - name: 🔄 Update Info.plist version
+      - name: 🔄 Inject version into Info.plist
         run: |
-          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" Packages/PressyBar.app/Contents/Info.plist
-          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" Packages/PressyBar.app/Contents/Info.plist
+          plist="Packages/PressyBar.app/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $VERSION" "$plist" || \
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$plist"
+          /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $VERSION" "$plist" || \
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$plist"
 
-      - name: 📋 Commit version bump and changelog
-        run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git add CHANGELOG.md
-          git commit -m "chore(release): v$VERSION"
-          git tag v$VERSION
-          git push origin HEAD
-          git push origin v$VERSION
-
-      - name: 📁 Create release zip
+      - name: 📦 Zip app
         run: |
           cd Packages
           zip -r PressyBar.zip PressyBar.app
 
-      - name: 🚀 Publish GitHub Release
+      - name: 🚀 Upload asset to release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v${{ env.VERSION }}
-          name: Release v${{ env.VERSION }}
+          tag_name: ${{ env.TAG_NAME }}
+          name: Release ${{ env.VERSION }}
           files: Packages/PressyBar.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
