@@ -1,0 +1,44 @@
+name: Build and Release PressyBar
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  release:
+    types: [published]
+
+jobs:
+  build-and-release:
+    runs-on: macos-latest
+
+    steps:
+      - name: ⬇️ Checkout Code
+        uses: actions/checkout@v3
+
+      - name: 🛠 Install Taskfile.dev CLI
+        run: |
+          brew install go-task/tap/go-task
+
+      - name: 🔨 Build App Bundle
+        run: task bundle
+
+      - name: 📦 Package PressyBar.app as zip
+        run: |
+          cd Packages
+          zip -r PressyBar.zip PressyBar.app
+
+      - name: 📤 Upload Artifact (for manual download or debugging)
+        uses: actions/upload-artifact@v3
+        with:
+          name: PressyBar
+          path: Packages/PressyBar.zip
+
+      - name: 🚀 Upload Release Asset
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: Packages/PressyBar.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
