@@ -1,44 +1,66 @@
-name: Build and Release PressyBar
+name: Release and Publish PressyBar
 
 on:
-  push:
-    branches:
-      - main
-    tags:
-      - "v*"
-  release:
-    types: [published]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump type: patch, minor, major"
+        required: false
+        default: "patch"
 
 jobs:
-  build-and-release:
+  release:
     runs-on: macos-latest
 
     steps:
-      - name: ⬇️ Checkout Code
+      - name: ⬇️ Checkout code
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-      - name: 🛠 Install Taskfile.dev CLI
+      - name: 📆 Set up Node.js (for standard-version)
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: 🐾 Install dependencies
         run: |
+          npm install -g standard-version
           brew install go-task/tap/go-task
 
-      - name: 🔨 Build App Bundle
+      - name: ✨ Bump version and generate changelog
+        run: |
+          standard-version --release-as ${{ github.event.inputs.bump }}
+          echo "VERSION=$(node -p \"require('./package.json').version\")" >> $GITHUB_ENV
+
+      - name: 📄 Task build bundle
         run: task bundle
 
-      - name: 📦 Package PressyBar.app as zip
+      - name: 🔄 Update Info.plist version
+        run: |
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" Packages/PressyBar.app/Contents/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" Packages/PressyBar.app/Contents/Info.plist
+
+      - name: 📋 Commit version bump and changelog
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add CHANGELOG.md
+          git commit -m "chore(release): v$VERSION"
+          git tag v$VERSION
+          git push origin HEAD
+          git push origin v$VERSION
+
+      - name: 📁 Create release zip
         run: |
           cd Packages
           zip -r PressyBar.zip PressyBar.app
 
-      - name: 📤 Upload Artifact (for manual download or debugging)
-        uses: actions/upload-artifact@v3
-        with:
-          name: PressyBar
-          path: Packages/PressyBar.zip
-
-      - name: 🚀 Upload Release Asset
-        if: github.event_name == 'release'
+      - name: 🚀 Publish GitHub Release
         uses: softprops/action-gh-release@v1
         with:
+          tag_name: v${{ env.VERSION }}
+          name: Release v${{ env.VERSION }}
           files: Packages/PressyBar.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
